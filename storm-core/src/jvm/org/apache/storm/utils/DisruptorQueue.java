@@ -34,6 +34,7 @@ import com.lmax.disruptor.dsl.ProducerType;
 import org.apache.storm.Config;
 import org.apache.storm.metric.api.IStatefulObject;
 import org.apache.storm.metric.internal.RateTracker;
+import org.apache.storm.metric.internal.LastKCounter;
 import org.apache.storm.metrics2.DisruptorMetrics;
 import org.apache.storm.metrics2.StormMetricRegistry;
 import org.slf4j.Logger;
@@ -325,6 +326,7 @@ public class DisruptorQueue implements IStatefulObject {
      */
     public class QueueMetrics {
         private final RateTracker _rateTracker = new RateTracker(10000, 10);
+        private final LastKCounter _tuplesPerObjCounter = new LastKCounter(100);
 
         public long writePos() {
             return _buffer.getCursor();
@@ -358,6 +360,8 @@ public class DisruptorQueue implements IStatefulObject {
             return tuplePopulation.get() / Math.max(arrivalRate(), 0.00001) * 1000.0;
         }
 
+        public double avgTuplesPerInput(){ return _tuplesPerObjCounter.mean(); }
+
         public Object getState() {
             Map state = new HashMap<String, Object>();
 
@@ -380,6 +384,7 @@ public class DisruptorQueue implements IStatefulObject {
             state.put("write_pos", wp);
             state.put("read_pos", rp);
             state.put("arrival_rate_secs", arrivalRateInSecs);
+            state.put("avg_tuples_per_input", _tuplesPerObjCounter.mean());
             state.put("sojourn_time_ms", sojournTime); //element sojourn time in milliseconds
             state.put("overflow", _overflowCount.get());
 
@@ -393,6 +398,10 @@ public class DisruptorQueue implements IStatefulObject {
 
         public void notifyDepartures(long counts) {
             tuplePopulation.getAndAdd(-counts);
+        }
+
+        public void addTuplesPerInput(long count) {
+            _tuplesPerObjCounter.addCount(count);
         }
 
         public void close() {
@@ -564,6 +573,16 @@ public class DisruptorQueue implements IStatefulObject {
         _metrics.notifyArrivals(numberOfTuples);
     }
 
+    /**
+     * This is the method used by the batcher's add or flush method to add objects to the ring buffer.
+     * @param objs A list of items to be added to the ring buffer, these items could be an AddressedTuple, an ArrayList
+     *             of AddressedTuples or a Map from taskID integer to an ArrayList of AddressedTuples. The supplied list
+     *             of items is a batch from the overflow queue.
+     * @param block Should the method wait for space to be available (block=true) or throw an exception (block=false)
+     *              if thee is not sufficient space in the ring buffer for all the items in the supplied list.
+     * @throws InsufficientCapacityException This will be thrown if block=false and there is not enough space for all
+     *                                       the items in the supplied ArrayList in the ring buffer.
+     */
     private void publishDirect(ArrayList<Object> objs, boolean block) throws InsufficientCapacityException {
         int size = objs.size();
         if (size > 0) {
@@ -580,7 +599,9 @@ public class DisruptorQueue implements IStatefulObject {
                 AtomicReference<Object> m = _buffer.get(at);
                 m.set(obj);
                 at++;
-                numberOfTuples += getTupleCount(obj);
+                long tuplesInObject = getTupleCount(obj);
+                numberOfTuples += tuplesInObject;
+                _metrics.addTuplesPerInput(tuplesInObject);
             }
             _metrics.notifyArrivals(numberOfTuples);
             _buffer.publish(begin, end);
