@@ -33,6 +33,7 @@ import com.lmax.disruptor.dsl.ProducerType;
 
 import org.apache.storm.Config;
 import org.apache.storm.metric.api.IStatefulObject;
+import org.apache.storm.metric.internal.LastKResults;
 import org.apache.storm.metric.internal.RateTracker;
 import org.apache.storm.metric.internal.LastKCounter;
 import org.apache.storm.metrics2.DisruptorMetrics;
@@ -360,7 +361,7 @@ public class DisruptorQueue implements IStatefulObject {
             return tuplePopulation.get() / Math.max(arrivalRate(), 0.00001) * 1000.0;
         }
 
-        public double avgTuplesPerInput(){ return _tuplesPerObjCounter.mean(); }
+        public double avgTuplesPerInput(){ return _tuplesPerObjCounter.get_stats().getMean(); }
 
         public Object getState() {
             Map state = new HashMap<String, Object>();
@@ -378,13 +379,19 @@ public class DisruptorQueue implements IStatefulObject {
             // departure rate according to Queuing Theory.
             final double sojournTime = tuplePop / Math.max(arrivalRateInSecs, 0.00001) * 1000.0;
 
+            LastKResults kResults = _tuplesPerObjCounter.get_stats();
+
             state.put("capacity", capacity());
             state.put("population", wp - rp);
             state.put("tuple_population", tuplePop);
             state.put("write_pos", wp);
             state.put("read_pos", rp);
             state.put("arrival_rate_secs", arrivalRateInSecs);
-            state.put("avg_tuples_per_input", _tuplesPerObjCounter.mean());
+            state.put("tuples_per_input.mean", kResults.getMean());
+            state.put("tuples_per_input.median", kResults.getMedian());
+            state.put("tuples_per_input.std", kResults.getStandardDeviation());
+            state.put("tuples_per_input.max", kResults.getMax());
+            state.put("tuples_per_input.min", kResults.getMin());
             state.put("sojourn_time_ms", sojournTime); //element sojourn time in milliseconds
             state.put("overflow", _overflowCount.get());
 
