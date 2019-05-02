@@ -11,6 +11,19 @@ import java.math.RoundingMode;
 public class LastKCounterTest extends TestCase {
 
     @Test
+    public void testEmpty() {
+
+        LastKCounter counter = new LastKCounter(10);
+        LastKResults results = counter.get_stats();
+
+        assertEquals(0.0, results.getMean());
+        assertEquals(0.0, results.getMedian());
+        assertEquals(0.0, results.getStandardDeviation());
+        assertEquals(0L, results.getMax());
+        assertEquals(0L, results.getMin());
+    }
+
+    @Test
     public void testMeanFull() {
         LastKCounter counter = new LastKCounter(10);
 
@@ -43,7 +56,7 @@ public class LastKCounterTest extends TestCase {
         LastKCounter counter = new LastKCounter(10);
 
         long[] counts = {5, 4, 3, 2, 1, 5};
-        for (long count: counts) {
+            for (long count: counts) {
             counter.addCount(count);
         }
 

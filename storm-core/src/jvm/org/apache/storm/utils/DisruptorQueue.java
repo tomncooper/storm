@@ -392,6 +392,7 @@ public class DisruptorQueue implements IStatefulObject {
             state.put("tuples_per_input.std", kResults.getStandardDeviation());
             state.put("tuples_per_input.max", kResults.getMax());
             state.put("tuples_per_input.min", kResults.getMin());
+            state.put("tuples_per_input.sample", _tuplesPerObjCounter.getSample());
             state.put("sojourn_time_ms", sojournTime); //element sojourn time in milliseconds
             state.put("overflow", _overflowCount.get());
 

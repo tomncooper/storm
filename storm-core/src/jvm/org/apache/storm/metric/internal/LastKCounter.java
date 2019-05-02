@@ -8,6 +8,7 @@ public class LastKCounter {
     private int size;
     private int head;
     private boolean saturated;
+    private long sample;
 
     public LastKCounter(int size) {
 
@@ -15,6 +16,7 @@ public class LastKCounter {
         counts = new long[size];
         head = 0;
         saturated = false;
+        sample = 1;
     }
 
     public synchronized void addCount(long count){
@@ -30,6 +32,9 @@ public class LastKCounter {
 
             // Always wrap around to the beginning
             head = (head + 1) % size;
+
+            // Update the sample to be the last seen value
+            sample = count;
         }
     }
 
@@ -87,6 +92,10 @@ public class LastKCounter {
 
     public synchronized LastKResults get_stats() {
 
+        if (!saturated && head == 0){
+            return new LastKResults(0,0,0,0,0);
+        }
+
         double total = 0.0;
 
         long max = 0;
@@ -129,6 +138,10 @@ public class LastKCounter {
         LastKResults results = new LastKResults(mean, median, std, max, min);
 
         return results;
+    }
+
+    public long getSample(){
+        return sample;
     }
 }
 
